@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -20,12 +21,16 @@ import (
 const usage = `Usage:
     age-keygen [-pq] [-o OUTPUT]
     age-keygen -y [-o OUTPUT] [INPUT]
+    age-keygen -export-mnemonic [-o OUTPUT] [INPUT]
+    age-keygen -import-mnemonic [-o OUTPUT] [INPUT]
 
 Options:
     -pq                       Generate a post-quantum hybrid ML-KEM-768 + X25519 key pair.
                               (This might become the default in the future.)
     -o, --output OUTPUT       Write the result to the file at path OUTPUT.
     -y                        Convert an identity file to a recipients file.
+    -export-mnemonic          Encode one native PQ identity as 24 English BIP39 words.
+    -import-mnemonic          Restore a native PQ identity from those 24 words.
 
 age-keygen generates a new native X25519 or, with the -pq flag, post-quantum
 hybrid ML-KEM-768 + X25519 key pair, and outputs it to standard output or to
@@ -37,6 +42,12 @@ is printed to standard error. If OUTPUT already exists, it is not overwritten.
 In -y mode, age-keygen reads an identity file from INPUT or from standard
 input and writes the corresponding recipient(s) to OUTPUT or to standard
 output, one per line, with no comments.
+
+Mnemonic modes read INPUT or standard input (also spelled -). They are mutually
+exclusive with -y and -pq. Import from a terminal prompts without echoing the
+words. The 24 words alone recover the PQ identity; no extra backup file or
+passphrase is needed. Keep them as private as the key. Use words exported from
+a randomly generated age PQ identity, never chosen words or a wallet phrase.
 
 Examples:
 
@@ -66,10 +77,13 @@ func main() {
 
 	var outFlag string
 	var pqFlag, versionFlag, convertFlag bool
+	var importMnemonicFlag, exportMnemonicFlag bool
 
 	flag.BoolVar(&versionFlag, "version", false, "print the version")
 	flag.BoolVar(&pqFlag, "pq", false, "generate a post-quantum key pair")
 	flag.BoolVar(&convertFlag, "y", false, "convert identities to recipients")
+	flag.BoolVar(&exportMnemonicFlag, "export-mnemonic", false, "export one PQ identity as 24 BIP39 words")
+	flag.BoolVar(&importMnemonicFlag, "import-mnemonic", false, "restore a PQ identity from 24 BIP39 words")
 	flag.StringVar(&outFlag, "o", "", "output to `FILE` (default stdout)")
 	flag.StringVar(&outFlag, "output", "", "output to `FILE` (default stdout)")
 	flag.Parse()
@@ -82,18 +96,22 @@ func main() {
 		return
 	}
 
-	if len(flag.Args()) != 0 && !convertFlag {
-		errorf("too many arguments")
+	modes := 0
+	for _, enabled := range []bool{pqFlag, convertFlag, importMnemonicFlag, exportMnemonicFlag} {
+		if enabled {
+			modes++
+		}
 	}
-	if len(flag.Args()) > 1 && convertFlag {
-		errorf("too many arguments")
+	if modes > 1 {
+		errorf("-pq, -y, -import-mnemonic, and -export-mnemonic are mutually exclusive")
 	}
-	if pqFlag && convertFlag {
-		errorf("-pq cannot be used with -y")
+	converting := convertFlag || importMnemonicFlag || exportMnemonicFlag
+	if len(flag.Args()) > 1 || (len(flag.Args()) != 0 && !converting) {
+		errorf("too many arguments")
 	}
 
 	var converted []byte
-	if convertFlag {
+	if converting {
 		in := os.Stdin
 		if inFile := flag.Arg(0); inFile != "" && inFile != "-" {
 			f, err := os.Open(inFile)
@@ -103,7 +121,23 @@ func main() {
 			defer f.Close()
 			in = f
 		}
-		converted = convert(in)
+		if convertFlag {
+			converted = convert(in)
+		} else {
+			var reader io.Reader = in
+			if importMnemonicFlag && term.IsTerminal(int(in.Fd())) {
+				phrase, err := readMnemonicTerminal(in)
+				if err != nil {
+					errorf("failed to read recovery words from terminal")
+				}
+				reader = bytes.NewReader(phrase)
+			}
+			var err error
+			converted, err = convertMnemonic(reader, importMnemonicFlag)
+			if err != nil {
+				errorf("%v", err)
+			}
+		}
 	}
 
 	out := os.Stdout
@@ -120,12 +154,14 @@ func main() {
 		out = f
 	}
 
-	if convertFlag {
-		writef(out, "%s", converted)
-	} else {
+	if !convertFlag {
 		if fi, err := out.Stat(); err == nil && fi.Mode().IsRegular() && fi.Mode().Perm()&0004 != 0 {
 			warning("writing secret key to a world-readable file")
 		}
+	}
+	if converting {
+		writef(out, "%s", converted)
+	} else {
 		generate(out, pqFlag)
 	}
 }

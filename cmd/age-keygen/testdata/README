@@ -1,0 +1,19 @@
+All identities, phrases, and ciphertexts here are PUBLIC TEST FIXTURES.
+Never use these identities for real secrets.
+
+pq-identity.txt comes from cmd/age/testdata/hybrid.txt at upstream commit
+b74dce4cdbe35b5e5f66c06d9612b72f89028758.
+pq-mnemonic.txt was independently encoded from its 32-byte Bech32 payload with
+Trezor/python-mnemonic at b57a5ad77a981e743f4167ab2f7927a55c1e82a8.
+pq-recipient.txt was obtained with unmodified upstream age-keygen -y.
+pq-ciphertext.age was produced once with unmodified upstream age, encrypting:
+    age PQ mnemonic recovery interoperability fixture\n
+Its encryption uses normal randomness; tests decrypt this fixed fixture, so
+recovery assertions are deterministic and do not generate new ciphertext.
+
+internal/bip39/testdata/vectors.json contains all eight 256-bit English vectors
+from Trezor/python-mnemonic at the same commit, retaining entropy and mnemonic.
+The canonical word list comes from that repository too. Both are covered by
+internal/bip39/LICENSE.wordlist. Specification:
+https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
+Reference vectors: https://github.com/trezor/python-mnemonic/blob/master/vectors.json

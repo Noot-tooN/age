@@ -34,6 +34,39 @@ $ age --decrypt -i key.txt data.tar.gz.age > data.tar.gz
 
 💬 The author pronounces it `[aɡe̞]` [with a hard *g*](https://translate.google.com/?sl=it&text=aghe), like GIF, and it's always spelled lowercase.
 
+## Local experimental mnemonic recovery
+
+This checkout adds `age-keygen -export-mnemonic` and `-import-mnemonic` for
+24-word paper recovery of native PQ identities. The words alone restore the
+complete standard identity; no extra backup file is required. This is a local,
+unreviewed extension, not an upstream age feature. See the
+[recovery instructions and format](doc/age-keygen.1.ronn#paper-recovery-local-experimental-extension).
+Build locally with `go build -o ./age-keygen ./cmd/age-keygen` and use
+`./age-keygen` explicitly to distinguish it from an installed upstream binary.
+
+The local Nix package installs a distinct command, `age-keygen-mnemonic`, so it
+does not replace an upstream `age` or `age-keygen`. Its nixpkgs revision and Go
+module dependency hash are pinned in `flake.lock` and `nix/package.nix`.
+
+From this checkout on a Nix-equipped machine:
+
+```sh
+nix build path:.#age-keygen-mnemonic
+./result/bin/age-keygen-mnemonic --version
+nix flake check path:.
+```
+
+Use `path:.` while reviewing uncommitted/untracked files: the default Git flake
+source excludes untracked files. Building and checking do not install a system
+profile or generate a real key. The package runs the BIP39 reference-vector and
+CLI recovery tests during the build. It retains the existing small BIP39 codec;
+no external mnemonic library or audit claim has been added.
+
+The package is a backup/recovery utility. SOPS continues to consume standard PQ
+identities; it never needs to read mnemonic words. Real key provisioning is a
+separate manual step after review. Never put real identity or mnemonic files
+inside this source checkout, which Nix copies into its store.
+
 ## Installation
 
 <table>

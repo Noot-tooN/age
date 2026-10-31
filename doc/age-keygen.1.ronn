@@ -5,6 +5,8 @@ age-keygen(1) -- generate age(1) key pairs
 
 `age-keygen` [`-pq`] [`-o` <OUTPUT>]<br>
 `age-keygen` `-y` [`-o` <OUTPUT>] [<INPUT>]<br>
+`age-keygen` `-export-mnemonic` [`-o` <OUTPUT>] [<INPUT>]<br>
+`age-keygen` `-import-mnemonic` [`-o` <OUTPUT>] [<INPUT>]<br>
 
 ## DESCRIPTION
 
@@ -30,6 +32,23 @@ standard error.
 * `-y`:
     Read an identity file from <INPUT> or from standard input and output the
     corresponding recipient(s), one per line, with no comments.
+
+* `-export-mnemonic`:
+    Read exactly one native PQ identity from <INPUT> or standard input and output
+    its 24 English BIP39 recovery words. Comments and blank lines are accepted.
+    Traditional X25519, SSH, plugin, and multiple identities are rejected.
+
+* `-import-mnemonic`:
+    Read 24 English BIP39 words from <INPUT> or standard input and output the
+    restored native PQ identity, with no comments. When input is a terminal,
+    prompt for a single line with echo disabled. The words are input, not command
+    arguments. Letter case and whitespace are ignored; abbreviated words, unknown
+    words, an incorrect word count, and invalid checksums are rejected.
+
+    Both mnemonic modes accept `-` for standard input, limit input to 64 KiB,
+    and are mutually exclusive with each other, `-pq`, and `-y`. Input is
+    validated before opening <OUTPUT>. Output files are created with permissions
+    0600 and existing files are never overwritten.
 
 * `--version`:
     Print the version and exit.
@@ -59,6 +78,46 @@ Convert an identity to a recipient:
 
     $ age-keygen -y key.txt
     age1pq1cd[... 1950 more characters ...]
+
+## PAPER RECOVERY (LOCAL EXPERIMENTAL EXTENSION)
+
+Generate a random PQ identity with the normal generator, then display its words
+for transcription onto paper:
+
+    $ age-keygen -pq -o key.txt
+    $ age-keygen -export-mnemonic key.txt
+
+Restore using only those 24 words, entered at the hidden prompt:
+
+    $ age-keygen -import-mnemonic -o restored-key.txt
+    Enter 24 recovery words (input hidden):
+
+No original key file, encrypted backup file, password, or wallet passphrase is
+required for recovery. The restored identity is byte-for-byte the original
+identity line and works with unmodified age versions supporting native PQ keys.
+The fork is needed to convert between words and the standard identity format.
+
+Before relying on the paper copy, restore from what you actually wrote down and
+compare `age-keygen -y key.txt` with `age-keygen -y restored-key.txt`, or decrypt
+an existing test file. BIP39's eight-bit checksum detects many transcription
+errors, but is not error correction and does not detect every mistake. A wrong
+phrase can have a valid checksum and restore a different key.
+
+The words encode the full 32-byte ML-KEM-768 + X25519 identity seed as BIP39
+256-bit entropy plus its eight-bit SHA-256 checksum, using the standard English
+word list. This does NOT use BIP39's PBKDF2 wallet seed derivation. The words have
+no key-type or version marker: label the paper "age native PQ, BIP39 English,
+raw 32-byte seed". That label is public format information, not extra secret
+material. PQ-only import/export avoids ambiguity with traditional X25519 seeds.
+
+The words grant full access to the private key. Generate them by exporting a
+random age PQ identity; do not choose words yourself, reuse a cryptocurrency
+wallet phrase, or enter them into a website. Exporting displays the secret in
+your terminal; account for terminal logging and scrollback. This encoding does
+not alter the hybrid encryption algorithms or add a new security proof.
+
+This local extension has deterministic compatibility tests, but has not received
+independent cryptographic review or upstream acceptance.
 
 ## SEE ALSO
 
